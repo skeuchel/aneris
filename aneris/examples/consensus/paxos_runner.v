@@ -463,6 +463,89 @@ Section runner.
       | BNamed x => nssubst x v
       end.
 
+    Fixpoint reduce_aux (n : nat) : nsexpr → nsexpr + nsval :=
+      match n with
+      | O   => inl
+      | S n =>
+          fix go (e : nsexpr) {struct e} :=
+            match e with
+            | NSMeta s n   => inl e
+            | NSVal v      => inr v
+            | NSPair e1 e2 =>
+                match go e2 with
+                | inl e2' => inl (NSPair e1 e2')
+                | inr v2  =>
+                    match go e1 with
+                    | inl e1' => inl (NSPair e1' (NSVal v2))
+                    | inr v1  => inr (NSPairV v1 v2)
+                    end
+                end
+            | NSApp e1 e2 =>
+                match go e2 with
+                | inl e2' => inl (NSApp e1 e2')
+                | inr v2 =>
+                    match go e1 with
+                    | inl e1' => inl (NSApp e1' (NSVal v2))
+                    | inr v1  =>
+                        match v1 with
+                        | NSRecV f x e3 =>
+                            reduce_aux n
+                              (nssubst' x v2 (nssubst' f (NSRecV f x e3) e3))
+                        | _ => inl (NSApp (NSVal v1) (NSVal v2))
+                        end
+                    end
+                end
+            | NSStore e1 e2 =>
+                match go e2 with
+                | inl e2' => inl (NSStore e1 e2')
+                | inr v2  => match go e1 with
+                             | inl e1' => inl (NSStore e1' (NSVal v2))
+                             | inr v1  => inl (NSStore (NSVal v1) (NSVal v2))
+                             end
+                end
+            | NSBinOp op e1 e2 =>
+                match go e2 with
+                | inl e2' => inl (NSBinOp op e1 e2')
+                | inr v2  =>
+                    match go e1 with
+                    | inl e1' => inl (NSBinOp op e1' (NSVal v2))
+                    | inr v1  => (* TODO: perform reductions here *)
+                                 inl (NSBinOp op (NSVal v1) (NSVal v2))
+                    end
+                end
+            | NSMatch e0 x1 e1 x2 e2 =>
+                match go e0 with
+                | inl e0' => inl (NSMatch e0' x1 e1 x2 e2)
+                | inr v0  =>
+                    match v0 with
+                    | NSInjLV v => reduce_aux n (nssubst' x1 v e1)
+                    | NSInjRV v => reduce_aux n (nssubst' x2 v e2)
+                    | _         => inl (NSMatch (NSVal v0) x1 e1 x2 e2)
+                    end
+                end
+            | NSSnd (NSVal (NSPairV v1 v2)) => inr v2
+            | NSRec f x e => inr (NSRecV f x e)
+            | NSMakeAddress (NSVal (NSLitV (LitString s))) (NSVal (NSLitV (LitInt p))) =>
+                inr (NSLitV (LitSocketAddress (SocketAddressInet s (Z.to_pos p))))
+            | _ => inl e
+            end
+      end.
+
+    Definition reduce (e : nsexpr) : nsexpr :=
+      match reduce_aux 10 e with
+      | inl e' => e'
+      | inr v  => NSVal v
+      end.
+    #[global] Arguments reduce e /.
+
+    Lemma reduce_sound (E : environments.envs (iProp Σ))
+      (ip : ip_address) (emap : list expr) (vmap : list val) (e : nsexpr) (Φ : val → iProp Σ) :
+      forall e',
+      reduce e = e' ->
+      environments.envs_entails E (aneris_wp ip top (ndenote emap vmap e') Φ) ->
+      environments.envs_entails E (aneris_wp ip top (ndenote emap vmap e) Φ).
+    Proof. Admitted.
+
     Fixpoint nsymbolic_reduce_wp_aux (n : nat) :
       nsexpr → (nsexpr → nat → Prop) → (nsval → nat → Prop) → nat → Prop :=
       match n with
@@ -694,6 +777,16 @@ Section runner.
       simple apply nsymbolic_reduce_wp_sound;
       simpl.
 
+    Ltac nswp_pures' :=
+      nsreify;
+      (* eapply because of e' *)
+      simple eapply reduce_sound;
+      [ (* reduce = .. *)
+        vm_compute; reflexivity
+      | (* envs_entails  *)
+        simpl
+      ].
+
   Lemma runner_spec :
     {{{ inv paxosN paxos_inv ∗
         ([∗ set] a ∈ acceptors, a ⤇ acceptor_si) ∗
@@ -713,8 +806,14 @@ Section runner.
                   Hls & Hch & Hips & Hfrags & Hpend0 & Hpend1) HΦ".
     rewrite /runner.
     do 8 (wp_makeaddress; wp_let). (* ~1.6s *)
+    (* nsreify. *)
+    (* simple eapply reduce_sound. *)
+    (* vm_compute. *)
+    (* reflexivity. *)
+    (* simpl. *)
     (* Time swp_pures.  (* 0.27-0.29s *) *)
     (* Time nswp_pures. (* 0.23-0.26s *) *)
+    (* Time nswp_pures'. (* 0.013 - 0.016s *) *)
     wp_apply (wp_set_empty socket_address); [done|]; iIntros (??).
     wp_apply (wp_set_add with "[//]"); iIntros (??).
     wp_apply (wp_set_add with "[//]"); iIntros (??).
@@ -812,6 +911,7 @@ Section runner.
   (* do 8 wp_let 2.8 - 3.0s *)
   (* swp_pures 2.15 - 2.35s *)
   (* nswp_pures: 2.1 - 2.3s *)
+  (* nswp_pures': 2.1 - 2.25 *)
 
   End NewSymbolic.
 
