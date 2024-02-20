@@ -163,7 +163,12 @@ Section ping_pong_runner.
   Proof.
     iIntros (Φ) "(Hponga & Hpinga & Hpo & Hpi & Hpongip & Hpingip) HΦ".
     rewrite /ping_pong_runner.
-    wp_pures.
+    wp_pure _.
+    wp_pure _.
+    wp_pure _.
+    wp_pure _.
+    wp_pure _.
+    wp_pure _.
     (* allocate [pong]'s socket protocol  *)
     wp_apply (aneris_wp_socket_interp_alloc_singleton pong_protocol with "Hpo").
     iIntros "#Hpong".
@@ -171,7 +176,9 @@ Section ping_pong_runner.
     iFrame.
     iSplitR "Hponga".
     2: { iIntros "!> Hp". wp_apply (pong_spec with "[$Hp $Hponga $Hpong]"); done. }
-    iModIntro. wp_pures.
+    iModIntro.
+    wp_pure _.
+    wp_pure _.
     wp_apply (aneris_wp_start {[80%positive : port]}); eauto.
     iFrame.
     iSplitL "HΦ".
