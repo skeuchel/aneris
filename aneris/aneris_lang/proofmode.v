@@ -136,22 +136,26 @@ Section Denote.
     | cons (x,v) s' => subst' x v (substs s' e)
     end.
 
-  Context (emap : list expr) (vmap : list val).
+  Variant meta :=
+  | meta_expr (e : expr)
+  | meta_val  (v : val).
 
-  Definition ndenoteS (ndenoteV : nsval -> val) : NSubst -> Subst :=
-    fix ndenoteS (s : NSubst) {struct s} : Subst :=
+  Context (mmap : list meta).
+
+  Definition ndenote_subst (ndenote_val : nsval -> val) : NSubst -> Subst :=
+    fix ndenote_subst (s : NSubst) {struct s} : Subst :=
       match s with
       | nil => nil
-      | cons (x, v) s' => cons (x, ndenoteV v) (ndenoteS s')
+      | cons (x, v) s' => cons (x, ndenote_val v) (ndenote_subst s')
       end.
 
   Fixpoint ndenote (e : nsexpr) : expr :=
     match e with
-    | NSMeta s n => match nth_error emap n with
-                    | Some e1 => substs (ndenoteS ndenoteV s) e1
-                    | None => #()
+    | NSMeta s n => match nth_error mmap n with
+                    | Some (meta_expr e1) => substs (ndenote_subst ndenote_val s) e1
+                    | _                   => #()
                     end
-    | NSVal v => Val (ndenoteV v)
+    | NSVal v => Val (ndenote_val v)
     | NSVar x => Var x
     | NSRec f x e1 => Rec f x (ndenote e1)
     | NSApp e1 e2 => App (ndenote e1) (ndenote e2)
@@ -182,23 +186,23 @@ Section Denote.
     | NSStart b e1 => Start b (ndenote e1)
     end
   with
-  ndenoteV (v : nsval) : val :=
+  ndenote_val (v : nsval) : val :=
     match v with
-    | NSMetaV n => match nth_error vmap n with
-                   | Some v1 => v1
-                   | None => #()
+    | NSMetaV n => match nth_error mmap n with
+                   | Some (meta_val v1) => v1
+                   | _                  => #()
                    end
     | NSLitV v1 => LitV v1
     | NSRecV f x e => RecV f x (ndenote e)
-    | NSPairV v1 v2 => PairV (ndenoteV v1) (ndenoteV v2)
-    | NSInjLV v1 => InjLV (ndenoteV v1)
-    | NSInjRV v1 => InjRV (ndenoteV v1)
+    | NSPairV v1 v2 => PairV (ndenote_val v1) (ndenote_val v2)
+    | NSInjLV v1 => InjLV (ndenote_val v1)
+    | NSInjRV v1 => InjRV (ndenote_val v1)
     end.
 
   Definition ndenotes (o : option (nsexpr + nsval)) : option (expr + val) :=
     match o with
     | Some (inl nse) => Some (inl (ndenote nse))
-    | Some (inr nsv) => Some (inr (ndenoteV nsv))
+    | Some (inr nsv) => Some (inr (ndenote_val nsv))
     | None           => None
     end.
 
@@ -402,9 +406,9 @@ Section Denote.
     end.
 
 End Denote.
-#[global] Arguments ndenote _ _ _ /.
-#[global] Arguments ndenoteV _ _ _ /.
-#[global] Arguments ndenotes _ _ _ /.
+#[global] Arguments ndenote _ _ /.
+#[global] Arguments ndenote_val _ _ /.
+#[global] Arguments ndenotes _ _ /.
 
 (* Definition reduce (e : nsexpr) : nsexpr := *)
 (*   match reduce_aux 10 e 0 with *)
@@ -421,16 +425,16 @@ Definition reduce' (e : nsexpr) : option (nsexpr + nsval) :=
 #[global] Arguments reduce' e /.
 
 Lemma tac_wp_reduce_sound `{!anerisG Mdl Σ} (Δ : envs (iPropI Σ)) E
-  (ip : ip_address) (emap : list expr) (vmap : list val) (nse : nsexpr) (Φ : val → iProp Σ) :
+  (ip : ip_address) (mmap : list meta) (nse : nsexpr) (Φ : val → iProp Σ) :
   forall nsev ev,
     reduce' nse = nsev ->
-    ndenotes emap vmap nsev = ev ->
+    ndenotes mmap nsev = ev ->
     match ev with
     | Some (inl e) => environments.envs_entails Δ (▷ aneris_wp ip E e Φ)
     | Some (inr v) => environments.envs_entails Δ (▷ Φ v)
     | None => False
     end ->
-    environments.envs_entails Δ (aneris_wp ip E (ndenote emap vmap nse) Φ).
+    environments.envs_entails Δ (aneris_wp ip E (ndenote mmap nse) Φ).
 Proof. Admitted.
 
 Ltac tac_wp_in_list x xs :=
@@ -440,108 +444,100 @@ Ltac tac_wp_in_list x xs :=
   | @cons _ _ ?xs' => tac_wp_in_list x xs'
   end.
 
-Ltac tac_wp_add_to_emap e emap :=
-  let b := tac_wp_in_list e emap in
+Ltac tac_wp_add_to_mmap m mmap :=
+  let b := tac_wp_in_list m mmap in
   match b with
-  | true => emap
-  | false => constr:(@cons expr e emap)
-  end.
-
-Ltac tac_wp_add_to_vmap v vmap :=
-  let b := tac_wp_in_list v vmap in
-  match b with
-  | true => vmap
-  | false => constr:(@cons val v vmap)
+  | true => mmap
+  | false => constr:(@cons meta m mmap)
   end.
 
 Ltac tac_wp_mk_map_expr
-  emap0 (* : list expr *)
-  vmap0 (* : list val *)
+  mmap0 (* : list meta *)
   e0    (* : expr *)
-  tac0  (* : list expr -> list val -> r *)
+  tac0  (* : list meta -> r *)
         (* : r *)
   :=
-  let rec tac_wp_mk_map_expr emap vmap e tac :=
-    (* idtac "tac_wp_mk_map_expr" emap vmap e; *)
+  let rec tac_wp_mk_map_expr mmap e tac :=
+    (* idtac "tac_wp_mk_map_expr" mmap e; *)
     lazymatch e with
     | Val ?v =>
-        tac_wp_mk_map_val emap vmap v tac
+        tac_wp_mk_map_val mmap v tac
     | Var ?x =>
         (* TODO: We do not allow meta-variables inside strings,
            so should we check if x is ground? *)
-        tac emap vmap
+        tac mmap
     | Rec ?b1 ?b2 ?e1 =>
-        tac_wp_mk_map_expr emap vmap e1 tac
+        tac_wp_mk_map_expr mmap e1 tac
     | App ?e1 ?e2 =>
-        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
-        tac_wp_mk_map_expr emap1 vmap1 e2 tac)
+        tac_wp_mk_map_expr mmap e1 ltac:(fun mmap1 =>
+        tac_wp_mk_map_expr mmap1 e2 tac)
     | UnOp ?op ?e1 =>
-        tac_wp_mk_map_expr emap vmap e1 tac
+        tac_wp_mk_map_expr mmap e1 tac
     | BinOp ?op ?e1 ?e2 =>
-        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
-        tac_wp_mk_map_expr emap1 vmap1 e2 tac)
+        tac_wp_mk_map_expr mmap e1 ltac:(fun mmap1 =>
+        tac_wp_mk_map_expr mmap1 e2 tac)
     | If ?e1 ?e2 ?e3 =>
-        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
-        tac_wp_mk_map_expr emap1 vmap1 e2 ltac:(fun emap2 vmap2 =>
-        tac_wp_mk_map_expr emap2 vmap2 e3 tac))
+        tac_wp_mk_map_expr mmap e1 ltac:(fun mmap1 =>
+        tac_wp_mk_map_expr mmap1 e2 ltac:(fun mmap2 =>
+        tac_wp_mk_map_expr mmap2 e3 tac))
     | FindFrom ?e1 ?e2 ?e3 =>
-        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
-        tac_wp_mk_map_expr emap1 vmap1 e2 ltac:(fun emap2 vmap2 =>
-        tac_wp_mk_map_expr emap2 vmap2 e3 tac))
+        tac_wp_mk_map_expr mmap e1 ltac:(fun mmap1 =>
+        tac_wp_mk_map_expr mmap1 e2 ltac:(fun mmap2 =>
+        tac_wp_mk_map_expr mmap2 e3 tac))
     | Substring ?e1 ?e2 ?e3 =>
-        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
-        tac_wp_mk_map_expr emap1 vmap1 e2 ltac:(fun emap2 vmap2 =>
-        tac_wp_mk_map_expr emap2 vmap2 e3 tac))
+        tac_wp_mk_map_expr mmap e1 ltac:(fun mmap1 =>
+        tac_wp_mk_map_expr mmap1 e2 ltac:(fun mmap2 =>
+        tac_wp_mk_map_expr mmap2 e3 tac))
     | Rand ?e1 =>
-        tac_wp_mk_map_expr emap vmap e1 tac
+        tac_wp_mk_map_expr mmap e1 tac
     | Pair ?e1 ?e2 =>
-        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
-        tac_wp_mk_map_expr emap1 vmap1 e2 tac)
+        tac_wp_mk_map_expr mmap e1 ltac:(fun mmap1 =>
+        tac_wp_mk_map_expr mmap1 e2 tac)
     | Fst ?e1 =>
-        tac_wp_mk_map_expr emap vmap e1 tac
+        tac_wp_mk_map_expr mmap e1 tac
     | Snd ?e1 =>
-        tac_wp_mk_map_expr emap vmap e1 tac
+        tac_wp_mk_map_expr mmap e1 tac
     | InjL ?e1 =>
-        tac_wp_mk_map_expr emap vmap e1 tac
+        tac_wp_mk_map_expr mmap e1 tac
     | InjR ?e1 =>
-        tac_wp_mk_map_expr emap vmap e1 tac
+        tac_wp_mk_map_expr mmap e1 tac
     | Case ?e1 ?e2 ?e3 =>
-        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
-        tac_wp_mk_map_expr emap1 vmap1 e2 ltac:(fun emap2 vmap2 =>
-        tac_wp_mk_map_expr emap2 vmap2 e3 tac))
+        tac_wp_mk_map_expr mmap e1 ltac:(fun mmap1 =>
+        tac_wp_mk_map_expr mmap1 e2 ltac:(fun mmap2 =>
+        tac_wp_mk_map_expr mmap2 e3 tac))
     | Alloc ?s ?e1 =>
-        tac_wp_mk_map_expr emap vmap e1 tac
+        tac_wp_mk_map_expr mmap e1 tac
     | MakeAddress ?e1 ?e2 =>
-        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
-        tac_wp_mk_map_expr emap1 vmap1 e2 tac)
+        tac_wp_mk_map_expr mmap e1 ltac:(fun mmap1 =>
+        tac_wp_mk_map_expr mmap1 e2 tac)
     | Start ?b ?e1 =>
-        tac_wp_mk_map_expr emap vmap e1 tac
+        tac_wp_mk_map_expr mmap e1 tac
     | _      =>
-        (* idtac "tac_wp_mk_map_expr.default.beforeAddToEMap" emap; *)
-        let emap' := tac_wp_add_to_emap e emap in
-        (* idtac "tac_wp_mk_map_expr.default.afterAddToEMap" emap'; *)
-        tac emap' vmap
+        (* idtac "tac_wp_mk_map_expr.default.beforeAddToMap" mmap; *)
+        let mmap' := tac_wp_add_to_mmap constr:(meta_expr e) mmap in
+        (* idtac "tac_wp_mk_map_expr.default.afterAddToMap" mmap'; *)
+        tac mmap'
     end
-  with tac_wp_mk_map_val emap vmap v tac :=
+  with tac_wp_mk_map_val mmap v tac :=
     lazymatch v with
     | LitV ?b =>
         (* TODO: We do not allow meta-variables inside base_lits,
            so should we check if b is ground? *)
-        tac emap vmap
+        tac mmap
     | RecV ?b1 ?b2 ?e1 =>
-        tac_wp_mk_map_expr emap vmap e1 tac
+        tac_wp_mk_map_expr mmap e1 tac
     | PairV ?v1 ?v2 =>
-        tac_wp_mk_map_val emap vmap v1 ltac:(fun emap1 vmap1 =>
-        tac_wp_mk_map_val emap1 vmap1 v2 tac)
+        tac_wp_mk_map_val mmap v1 ltac:(fun mmap1 =>
+        tac_wp_mk_map_val mmap1 v2 tac)
     | InjLV ?v1 =>
-        tac_wp_mk_map_val emap vmap v1 tac
+        tac_wp_mk_map_val mmap v1 tac
     | InjRV ?v1 =>
-        tac_wp_mk_map_val emap vmap v1 tac
+        tac_wp_mk_map_val mmap v1 tac
     | _ =>
-        let vmap' := tac_wp_add_to_vmap v vmap in
-        tac emap vmap'
+        let mmap' := tac_wp_add_to_mmap constr:(meta_val v) mmap in
+        tac mmap'
     end
-  in tac_wp_mk_map_expr emap0 vmap0 e0 tac0.
+  in tac_wp_mk_map_expr mmap0 e0 tac0.
 
 Ltac tac_wp_map_lookup
   (* forall a. *)
@@ -555,7 +551,7 @@ Ltac tac_wp_map_lookup
          constr:(S n)
      end.
 
-Ltac tac_wp_reify_expr emap vmap e0 :=
+Ltac tac_wp_reify_expr mmap e0 :=
   let rec tac_wp_reify_expr e :=
     lazymatch e with
     | Val ?v =>
@@ -627,7 +623,7 @@ Ltac tac_wp_reify_expr emap vmap e0 :=
         let nse1 := tac_wp_reify_expr e1 in
         constr:(NSStart b nse1)
     | _ =>
-        let n := tac_wp_map_lookup e emap in
+        let n := tac_wp_map_lookup constr:(meta_expr e) mmap in
         constr:(NSMeta (@nil (string * nsval)) n)
     end
   with tac_wp_reify_val v :=
@@ -648,7 +644,7 @@ Ltac tac_wp_reify_expr emap vmap e0 :=
         let nsv1 := tac_wp_reify_val v1 in
         constr:(NSInjRV nsv1)
     | _ =>
-        let n := tac_wp_map_lookup v vmap in
+        let n := tac_wp_map_lookup constr:(meta_val v) mmap in
         constr:(NSMetaV  n)
     end
   in tac_wp_reify_expr e0.
@@ -658,11 +654,11 @@ Ltac tac_wp_reify :=
   |- environments.envs_entails ?E (aneris_wp ?ip ?m ?e ?Φ) =>
       (* Simplify to reduce some calls to [inject] like [Inject_expr]. *)
       let e := eval simpl in e in
-      tac_wp_mk_map_expr (@nil expr) (@nil val) e
-        ltac:(fun emap vmap =>
-                let e' := tac_wp_reify_expr emap vmap e in
+      tac_wp_mk_map_expr (@nil meta) e
+        ltac:(fun mmap =>
+                let e' := tac_wp_reify_expr mmap e in
                 change (environments.envs_entails E
-                          (aneris_wp ip m (ndenote emap vmap e') Φ)))
+                          (aneris_wp ip m (ndenote mmap e') Φ)))
   end.
 
 Ltac wp_pures :=
@@ -1278,12 +1274,12 @@ Tactic Notation "wp_send_duplicate" :=
       Ltac reifyTest :=
         match goal with
         | |- P ?e =>
-            tac_wp_mk_map_expr (@nil expr) (@nil val) e
-              ltac:(fun emap vmap =>
-                      idtac "reify.cont.before" emap vmap e;
-                      let e' := tac_wp_reify_expr emap vmap e in
-                      idtac "reify.cont.after" emap vmap e';
-                      change (P (ndenote emap vmap e')))
+            tac_wp_mk_map_expr (@nil meta) e
+              ltac:(fun mmap =>
+                      idtac "reify.cont.before" mmap e;
+                      let e' := tac_wp_reify_expr mmap e in
+                      idtac "reify.cont.after" mmap e';
+                      change (P (ndenote mmap e')))
         end.
 
 
