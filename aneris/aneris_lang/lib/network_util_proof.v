@@ -142,7 +142,7 @@ Section library.
         [∗ list] i↦n ∈ nodes, ∃ m, ⌜msgs !! i = Some m⌝ ∗ ⌜m_sender m = n⌝ ∗ φ m }}}.
   Proof.
     iIntros (Hip ?? Φ) "(Hns & Hh & #Hφ & Ha) HΦ".
-    rewrite /receivefrom_all. wp_pures.
+    rewrite /receivefrom_all. old_wp_pures.
     wp_apply (wp_list_fold
                 (λ (nodes' : list socket_address) (acc : val), ∃ msgs R,
                     h ↪[ip] s ∗ a @ φ ⤳# (R, T) ∗
@@ -161,6 +161,7 @@ Section library.
       iIntros (m) "(Hh & Ha & Hm)".
       wp_apply wp_unSOME; [done|]; iIntros "_".
       wp_pures.
+      old_wp_pures.
       case_bool_decide as Heq.
       + wp_pures.
         wp_apply (wp_list_cons (m_body m) []); first done.
@@ -222,7 +223,7 @@ Section library.
                                    ⌜m_sender m = n⌝ ∗ Ψ (m_body m) ∗ φ m }}}.
   Proof.
     iIntros (Hip ??) "#Hfv !#". iIntros (Φ) "(Hns & Hh & #Hφ & Ha) HΦ".
-    rewrite /wait_receivefrom_all. wp_pures.
+    rewrite /wait_receivefrom_all. old_wp_pures.
     wp_apply (wp_list_fold
                 (λ (nodes' : list socket_address) (acc : val), ∃ msgs R,
                     h ↪[ip] s ∗ a @ φ ⤳# (R, T) ∗
@@ -242,6 +243,7 @@ Section library.
       iIntros (m) "(Hh & Ha & Hm)".
       wp_apply wp_unSOME; [done|]; iIntros "_".
       wp_pures.
+      old_wp_pures.
       case_bool_decide as Heq.
       + wp_pures.
         wp_apply "Hfv"; [done|].
@@ -361,6 +363,7 @@ Section library.
                           (λ _, True)%I
                           (h ↪[ip] s ∗ ∃ T, a ⤳ (R, T))%I with "[] [$Hh $Hnodes Ha]"); [|eauto|].
     { iIntros (n _ Ψ)" !# (%Hn & [Hh Ha] & _ & #Hf & Hmsg) H". iDestruct "Ha" as (T') "Ha".
+      simpl.
       wp_pures.
       wp_send "Hmsg"; [rewrite /msg //|].
       wp_let.
@@ -388,6 +391,7 @@ Section library.
     wp_apply (wp_set_iter (λ _, True)%I Q (λ _, True)%I (P ∗ h ↪[ip] s)%I _ nodes
                 with "[] [$HP $Hh]").
     { iIntros (n _ Ψ) "!# (% & [HP Hh] & _) HΨ".
+      simpl.
       wp_pures.
       wp_bind (SendTo _ _ _).
       iMod ("Hvs" with "[$HP //]") as (R T φ) "(Ha & #Hn & Hf & Hclose)".
@@ -419,6 +423,7 @@ Section library.
     wp_apply (wp_set_iter (λ _, True)%I Q Φ (P ∗ h ↪[ip] s)%I _ nodes
                 with "[] [$HP $Hh $HΦ]").
     { iIntros (n nodes' Ψ') "!# [% ([HP Hh] & HΦ & _)] HΨ".
+      simpl.
       wp_pures.
       wp_bind (SendTo _ _ _).
       wp_apply aneris_wp_atomic_take_step_model.
@@ -557,7 +562,7 @@ Section library.
     wp_pures. wp_find_from.
     { by instantiate (1:=0%nat). }
     rewrite HP (index_0_append_char "_") /=; auto.  wp_match.
-    wp_pures.
+    old_wp_pures.
     wp_substring.
     { repeat split; eauto.
       instantiate (1:=(String.length t + 1)%nat). apply Nat2Z.inj_add.

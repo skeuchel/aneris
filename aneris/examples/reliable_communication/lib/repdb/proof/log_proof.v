@@ -28,7 +28,8 @@ Section Log.
     {{{ logL logV, RET #logL; logL ↦[ip] logV ∗ ⌜is_log [] logV⌝}}}.
   Proof.
     iIntros (Φ) "_ HΦ".
-    wp_rec. wp_pures.
+    unfold log_create, list_nil.
+    wp_pures.
     wp_alloc l as "Hl".
     iApply "HΦ". iFrame. iPureIntro.
     by eexists.
@@ -43,12 +44,13 @@ Section Log.
     iIntros (Φ) "(%Hl & Hp) HΦ".
     destruct Hl as (lV & -> & Hlst).
     wp_lam. wp_pures.
-    wp_load. wp_pures.
+    wp_load. old_wp_pures.
     wp_apply (wp_list_cons _ []); first done.
     iIntros (v) "%Hl2".
     wp_apply wp_list_append; first done.
     iIntros (v') "%Hl'".
     wp_pures.
+    old_wp_pures.
     wp_store.
     iApply "HΦ".
     iFrame.

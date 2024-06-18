@@ -19,7 +19,9 @@ Section map_specs.
     {{{ v, RET v; ⌜is_map v ∅⌝}}}.
   Proof.
     iIntros (Φ) "_ HΦ".
-    wp_rec. wp_pures. iApply "HΦ".
+    unfold map_empty, list_nil.
+    wp_pures.
+    iApply "HΦ".
     iExists []. repeat iSplit; auto.
     iPureIntro. constructor.
   Qed.

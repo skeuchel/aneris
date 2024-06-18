@@ -29,12 +29,12 @@ Section paxos_client.
       [done|done|done|].
     iIntros (m1) "(Hh & Hc & (%Q1 & % & %val1 & % & %Hmaj1 & #HQ1))".
     wp_apply wp_unSOME; [done|]; iIntros "_".
-    wp_pures.
+    old_wp_pures.
     wp_apply (s_deser_spec client_serialization); [done|]; iIntros "_".
-    wp_pures.
+    old_wp_pures.
     wp_apply (wp_pers_wait_receivefrom (λ m, ⌜m_sender m ≠ m_sender m1⌝)%I
              with "[] [$Hh $Hc $Hc_si]").
-    { iIntros (m Φ) "!# _ HΦ". wp_pures. iApply "HΦ".
+    { iIntros (m Φ) "!# _ HΦ". old_wp_pures. iApply "HΦ".
       case_bool_decide as Hneq; simpl; [done|].
       iPureIntro. congruence. }
     iIntros (m2 R') "(Hh & Hc & %Hneq & (%Q2 & % & %val2 & % & %Hmaj2 & #HQ2))".
@@ -52,7 +52,7 @@ Section paxos_client.
     { iIntros (a Ha).
       iDestruct (big_sepS_elem_of _ _ a with "HQ2") as "Hm"; [done|].
       by iDestruct (msgs_elem_of_in with "Hmauth Hm") as %?. }
-    wp_pures.
+    old_wp_pures.
     iMod ("Hclose" with "[Hfrag Hmauth Hrest]") as "_".
     { iModIntro. iExists _. iFrame. }
     iModIntro.

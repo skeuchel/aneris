@@ -210,7 +210,7 @@ Section paxos_acceptor.
       apply (proj2_sig a). }
     iModIntro.
     wp_apply wp_unSOME; [done|]; iIntros "_".
-    wp_pures.
+    old_wp_pures.
     iDestruct "Hm" as "(% & -> & [(%bal & % & Hm1) | (%bal & %val & % & Hm1)])".
     - (* a phase 1a message was received *)
       wp_apply (s_deser_spec acceptor_serialization); [done|]; iIntros "_".
@@ -218,13 +218,14 @@ Section paxos_acceptor.
       wp_load.
       destruct maxBal as [bal'|].
       + (* [maxBal] has been initialized *)
-        wp_pures.
+        old_wp_pures.
         wp_apply wp_unSOME; [done|]; iIntros "_".
         wp_op.
         case_bool_decide; wp_if; last first.
         { wp_seq. iApply ("IH" with "Hh"). iExists _, _. by iFrame. }
         (* fresh ballot received greater than local [maxBal] *)
-        wp_store. wp_load. wp_pures.
+        old_wp_pures.
+        wp_store. wp_load. old_wp_pures.
         wp_apply (s_ser_spec (proposer_serialization)).
         { iPureIntro. destruct maxVal as [[??]|]; apply serializable. }
         iIntros (s Hser).
@@ -233,8 +234,8 @@ Section paxos_acceptor.
         iIntros "(Hh & Hmv & Hmb & #Hm2)". do 2 wp_seq.
         iApply ("IH" with "Hh"). iExists _, _. by iFrame.
       + (* [maxBal] uninitialized, no messages received before *)
-        wp_pures.
-        wp_store. wp_load. wp_pures.
+        old_wp_pures.
+        wp_store. wp_load. old_wp_pures.
         wp_apply (s_ser_spec (proposer_serialization)).
         { iPureIntro. destruct maxVal as [[??]|]; apply serializable. }
         iIntros (s Hser).
@@ -248,13 +249,13 @@ Section paxos_acceptor.
       wp_load.
       destruct maxBal as [bal'|].
       + (* [maxBal] has been initialized *)
-        wp_pures.
+        old_wp_pures.
         wp_apply wp_unSOME; [done|]; iIntros "_".
         wp_op.
         case_bool_decide; wp_if; last first.
         { wp_seq. iApply ("IH" with "Hh"). iExists _, _. by iFrame. }
         (* ballot received, greater than or equal to local [maxBal] *)
-        do 2 wp_store.
+        do 2 (old_wp_pures; wp_store).
         wp_apply (s_ser_spec (learner_serialization)).
         { iPureIntro. apply serializable. }
         iIntros (s Hser).
@@ -264,8 +265,7 @@ Section paxos_acceptor.
         do 2 wp_seq.
         iApply ("IH" with "Hh"). iExists _, _. by iFrame.
       + (* [maxBal] uninitialized, no messages received before *)
-        wp_pures.
-        do 2 wp_store.
+        do 2 (old_wp_pures; wp_store);
         wp_apply (s_ser_spec (learner_serialization)).
         { iPureIntro. apply serializable. }
         iIntros (s Hser).

@@ -48,7 +48,7 @@ Lemma int_ser_spec `{!anerisG Mdl Σ} ip v :
 Proof.
   iIntros (Φ [i ->]) "HΦ".
   rewrite /int_ser /int_is_ser.
-  wp_pures.
+  old_wp_pures.
   iApply "HΦ"; eauto.
 Qed.
 
@@ -61,7 +61,7 @@ Proof.
   rewrite /int_deser /int_is_ser.
   assert (un_op_eval IntOfString #(StringOfZ i) = Some (InjRV #i)).
   { rewrite /= ZOfString_inv //=. }
-  wp_pures.
+  old_wp_pures.
   iApply wp_unSOME; done.
 Qed.
 
@@ -103,7 +103,7 @@ Lemma bool_ser_spec `{!anerisG Mdl Σ} ip v :
 Proof.
   iIntros (Φ [b ->]) "HΦ".
   rewrite /bool_ser /bool_is_ser.
-  destruct b; wp_pures; iApply "HΦ"; eauto.
+  destruct b; old_wp_pures; iApply "HΦ"; eauto.
 Qed.
 
 Lemma bool_deser_spec `{!anerisG Mdl Σ} ip v s :
@@ -116,7 +116,7 @@ Proof.
   assert (un_op_eval IntOfString #(StringOfZ $ bool_to_int b) =
           Some (InjRV #(bool_to_int b))).
   { rewrite /= ZOfString_inv //=. }
-  by destruct b; wp_pures; iApply "HΦ".
+  by destruct b; old_wp_pures; iApply "HΦ".
 Qed.
 
 Definition bool_serialization : serialization :=
@@ -259,7 +259,7 @@ Section prod_serialization.
     wp_pures.
     wp_apply (s_ser_spec B); first done.
     iIntros (s2 Hs2).
-    wp_pures.
+    old_wp_pures.
     iApply "HΦ".
     iPureIntro.
     exists v1, v2, s1, s2; split_and!; auto.
@@ -272,18 +272,18 @@ Section prod_serialization.
   Proof.
     iIntros (Φ (v1 & v2 & s1 & s2 & -> & Hv1 & Hv2 & ->)) "HΦ".
     rewrite /prod_deser /prod_is_ser /prod_ser_str.
-    wp_pures.
+    old_wp_pures.
     wp_find_from; first by split_and!; [|by apply nat_Z_eq; first lia].
     erewrite (index_0_append_char ); auto; last first.
     { apply valid_tag_stringOfZ. }
-    wp_pures.
+    old_wp_pures.
     wp_substring; first by split_and!; [|by apply nat_Z_eq; first lia|done].
     rewrite substring_0_length_append.
     wp_pure _.
     { rewrite /= ZOfString_inv //. }
     wp_apply wp_unSOME; first done.
     iIntros "_"; simpl.
-    wp_pures.
+    old_wp_pures.
     wp_substring; first by split_and!; [|by apply nat_Z_eq; first lia|done].
     replace (Z.to_nat (Z.add (Z.of_nat
                                 (String.length
@@ -291,7 +291,7 @@ Section prod_serialization.
                              1%Z)) with
         (String.length (StringOfZ (Z.of_nat (String.length s1))) + 1)%nat by lia.
     rewrite substring_add_length_app /= substring_0_length_append.
-    wp_pures.
+    old_wp_pures.
     rewrite !length_app /=.
     match goal with
     | |- context [Substring _ _ ?X] =>
@@ -374,11 +374,11 @@ Section sum_serialization.
     destruct Hw as [[-> Hw]|[-> Hw]]; wp_pures.
     - wp_apply (s_ser_spec A); first done.
       iIntros (s Hs); simpl.
-      wp_pures.
+      old_wp_pures.
       iApply "HΦ"; eauto 10.
     - wp_apply (s_ser_spec B); first done.
       iIntros (s Hs); simpl.
-      wp_pures.
+      old_wp_pures.
       iApply "HΦ"; eauto 10.
   Qed.
 
@@ -395,7 +395,7 @@ Section sum_serialization.
         first by split_and!;
               [|by apply nat_Z_eq; first lia|by apply nat_Z_eq; first lia].
       rewrite (substring_0_length_append "L_").
-      wp_pures.
+      old_wp_pures.
       wp_substring;
         first by split_and!;
               [|by apply nat_Z_eq; first lia|by apply nat_Z_eq; first lia].
@@ -403,7 +403,7 @@ Section sum_serialization.
       replace (Z.to_nat (S (S (String.length s')) - 2)) with
           (String.length s') by lia.
       rewrite substring_0_length.
-      wp_pures.
+      old_wp_pures.
       wp_apply (s_deser_spec A); first done.
       iIntros "_".
       wp_pures.
@@ -412,7 +412,7 @@ Section sum_serialization.
         first by split_and!;
               [|by apply nat_Z_eq; first lia|by apply nat_Z_eq; first lia].
       rewrite (substring_0_length_append "R_").
-      wp_pures.
+      old_wp_pures.
       wp_substring;
         first by split_and!;
               [|by apply nat_Z_eq; first lia|by apply nat_Z_eq; first lia].
@@ -420,7 +420,7 @@ Section sum_serialization.
       replace (Z.to_nat (S (S (String.length s')) - 2)) with
           (String.length s') by lia.
       rewrite substring_0_length.
-      wp_pures.
+      old_wp_pures.
       wp_apply (s_deser_spec B); first done.
       iIntros "_".
       wp_pures.
@@ -498,9 +498,9 @@ Section option_serialization.
     destruct Hw as [[w (-> & Hw)]|Hw]; wp_pures.
     - wp_apply (s_ser_spec T); first done.
       iIntros (s Hs); simpl.
-      wp_pures.
+      old_wp_pures.
       iApply "HΦ"; eauto 10.
-    - rewrite Hw. wp_pures.
+    - rewrite Hw. old_wp_pures.
       iApply "HΦ". eauto.
   Qed.
 
@@ -516,17 +516,17 @@ Section option_serialization.
     - wp_substring;
         first by split_and!;
                           [|by apply nat_Z_eq; first lia|by apply nat_Z_eq; first lia].
-      wp_pures.
+      old_wp_pures.
       wp_substring;
         first by split_and!;
               [|by apply nat_Z_eq; first lia|by apply nat_Z_eq; first lia].
       rewrite (substring_add_length_app _ _ "L_") /=.
-      wp_pures. by iApply "HΦ".
+      old_wp_pures. by iApply "HΦ".
     - wp_substring;
         first by split_and!;
               [|by apply nat_Z_eq; first lia|by apply nat_Z_eq; first lia].
       rewrite (substring_0_length_append "R_").
-      wp_pures.
+      old_wp_pures.
       wp_substring;
         first by split_and!;
               [|by apply nat_Z_eq; first lia|by apply nat_Z_eq; first lia].
@@ -534,7 +534,7 @@ Section option_serialization.
       replace (Z.to_nat (S (S (String.length s')) - 2)) with
           (String.length s') by lia.
       rewrite substring_0_length.
-      wp_pures.
+      old_wp_pures.
       wp_apply (s_deser_spec T); first done.
       iIntros "_".
       wp_pures.

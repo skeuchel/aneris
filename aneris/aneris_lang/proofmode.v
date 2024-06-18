@@ -81,10 +81,612 @@ Tactic Notation "wp_pure" open_constr(efoc) :=
     || fail "wp_pure: cannot find" efoc "in" e "or" efoc "is not a redex"
   end.
 
+Inductive nsexpr : Set :=
+| NSMeta : list (string * nsval) → nat → nsexpr
+| NSVal : nsval → nsexpr
+| NSVar : string → nsexpr
+| NSRec : binder → binder → nsexpr → nsexpr
+| NSApp : nsexpr → nsexpr → nsexpr
+| NSUnOp : un_op → nsexpr → nsexpr
+| NSBinOp : bin_op → nsexpr → nsexpr → nsexpr
+| NSIf : nsexpr → nsexpr → nsexpr → nsexpr
+| NSFindFrom : nsexpr → nsexpr → nsexpr → nsexpr
+| NSSubstring : nsexpr → nsexpr → nsexpr → nsexpr
+| NSRand : nsexpr → nsexpr
+| NSPair : nsexpr → nsexpr → nsexpr
+| NSFst : nsexpr → nsexpr
+| NSSnd : nsexpr → nsexpr
+| NSInjL : nsexpr → nsexpr
+| NSInjR : nsexpr → nsexpr
+| NSCase : nsexpr → nsexpr → nsexpr → nsexpr
+| NSFork : nsexpr → nsexpr
+| NSAlloc : option string → nsexpr → nsexpr
+| NSLoad : nsexpr → nsexpr
+| NSStore : nsexpr → nsexpr → nsexpr
+| NSCAS : nsexpr → nsexpr → nsexpr → nsexpr
+| NSMakeAddress : nsexpr → nsexpr → nsexpr
+| NSGetAddressInfo : nsexpr → nsexpr
+| NSNewSocket : nsexpr → nsexpr
+| NSSocketBind : nsexpr → nsexpr → nsexpr
+| NSSendTo : nsexpr → nsexpr → nsexpr → nsexpr
+| NSReceiveFrom : nsexpr → nsexpr
+| NSSetReceiveTimeout : nsexpr → nsexpr → nsexpr → nsexpr
+| NSStart : base_lit → nsexpr → nsexpr
+with nsval : Set :=
+| NSMetaV : nat -> nsval
+| NSLitV : base_lit → nsval
+| NSRecV : binder → binder → nsexpr → nsval
+| NSPairV : nsval → nsval → nsval
+| NSInjLV : nsval → nsval
+| NSInjRV : nsval → nsval.
+
+Section Denote.
+
+  Notation NSLam x e := (NSRec BAnon x e) (only parsing).
+  Notation NSLet x e1 e2 := (NSApp (NSLam x e2) e1) (only parsing).
+  Notation NSSeq e1 e2 := (NSLet BAnon e1 e2) (only parsing).
+  Notation NSMatch e0 x1 e1 x2 e2 := (NSCase e0 (NSLam x1 e1) (NSLam x2 e2)) (only parsing).
+
+  Notation NSubst := (list (string * nsval)).
+  Notation Subst := (list (string * val)).
+
+  Fixpoint substs (s : Subst) (e : expr) {struct s} : expr :=
+    match s with
+    | nil => e
+    | cons (x,v) s' => subst' x v (substs s' e)
+    end.
+
+  Context (emap : list expr) (vmap : list val).
+
+  Definition ndenoteS (ndenoteV : nsval -> val) : NSubst -> Subst :=
+    fix ndenoteS (s : NSubst) {struct s} : Subst :=
+      match s with
+      | nil => nil
+      | cons (x, v) s' => cons (x, ndenoteV v) (ndenoteS s')
+      end.
+
+  Fixpoint ndenote (e : nsexpr) : expr :=
+    match e with
+    | NSMeta s n => match nth_error emap n with
+                    | Some e1 => substs (ndenoteS ndenoteV s) e1
+                    | None => #()
+                    end
+    | NSVal v => Val (ndenoteV v)
+    | NSVar x => Var x
+    | NSRec f x e1 => Rec f x (ndenote e1)
+    | NSApp e1 e2 => App (ndenote e1) (ndenote e2)
+    | NSUnOp op e1 => UnOp op (ndenote e1)
+    | NSBinOp op e1 e2 => BinOp op (ndenote e1) (ndenote e2)
+    | NSIf e1 e2 e3 => If (ndenote e1) (ndenote e2) (ndenote e3)
+    | NSFindFrom e1 e2 e3 => FindFrom (ndenote e1) (ndenote e2) (ndenote e3)
+    | NSSubstring e1 e2 e3 => Substring (ndenote e1) (ndenote e2) (ndenote e3)
+    | NSRand e1 => Rand (ndenote e1)
+    | NSPair e1 e2 => Pair (ndenote e1) (ndenote e2)
+    | NSFst e1 => Fst (ndenote e1)
+    | NSSnd e1 => Snd (ndenote e1)
+    | NSInjL e1 => InjL (ndenote e1)
+    | NSInjR e1 => InjR (ndenote e1)
+    | NSCase e1 e2 e3 => Case (ndenote e1) (ndenote e2) (ndenote e3)
+    | NSFork e1 => Fork (ndenote e1)
+    | NSAlloc s e1 => Alloc s (ndenote e1)
+    | NSLoad e1 => Load (ndenote e1)
+    | NSStore e1 e2 => Store (ndenote e1) (ndenote e2)
+    | NSCAS e1 e2 e3 => CAS (ndenote e1) (ndenote e2) (ndenote e3)
+    | NSMakeAddress e1 e2 => MakeAddress (ndenote e1) (ndenote e2)
+    | NSGetAddressInfo e1 => GetAddressInfo (ndenote e1)
+    | NSNewSocket e1 => NewSocket (ndenote e1)
+    | NSSocketBind e1 e2 => SocketBind (ndenote e1) (ndenote e2)
+    | NSSendTo e1 e2 e3 => SendTo (ndenote e1) (ndenote e2) (ndenote e3)
+    | NSReceiveFrom e1 => ReceiveFrom (ndenote e1)
+    | NSSetReceiveTimeout e1 e2 e3 => SetReceiveTimeout (ndenote e1) (ndenote e2) (ndenote e3)
+    | NSStart b e1 => Start b (ndenote e1)
+    end
+  with
+  ndenoteV (v : nsval) : val :=
+    match v with
+    | NSMetaV n => match nth_error vmap n with
+                   | Some v1 => v1
+                   | None => #()
+                   end
+    | NSLitV v1 => LitV v1
+    | NSRecV f x e => RecV f x (ndenote e)
+    | NSPairV v1 v2 => PairV (ndenoteV v1) (ndenoteV v2)
+    | NSInjLV v1 => InjLV (ndenoteV v1)
+    | NSInjRV v1 => InjRV (ndenoteV v1)
+    end.
+
+  Definition ndenotes (o : option (nsexpr + nsval)) : option (expr + val) :=
+    match o with
+    | Some (inl nse) => Some (inl (ndenote nse))
+    | Some (inr nsv) => Some (inr (ndenoteV nsv))
+    | None           => None
+    end.
+
+  Fixpoint nssubst (x : string) (v : nsval) (e : nsexpr) {struct e} : nsexpr :=
+    match e with
+    | NSMeta s n => NSMeta (cons (x,v) s) n
+    | NSVal v => NSVal v
+    | NSVar y => if decide (x = y) then NSVal v else NSVar y
+    | NSRec f y e0 =>
+        NSRec f y
+          (if decide (and (not (eq (BNamed x) f)) (not (eq (BNamed x) y)))
+           then nssubst x v e0
+           else e0)
+    | NSApp e1 e2 => NSApp (nssubst x v e1) (nssubst x v e2)
+    | NSUnOp op e1 => NSUnOp op (nssubst x v e1)
+    | NSBinOp op e1 e2 => NSBinOp op (nssubst x v e1) (nssubst x v e2)
+    | NSIf e1 e2 e3 => NSIf (nssubst x v e1) (nssubst x v e2) (nssubst x v e3)
+    | NSFindFrom e1 e2 e3 => NSFindFrom (nssubst x v e1) (nssubst x v e2) (nssubst x v e3)
+    | NSSubstring e1 e2 e3 => NSSubstring (nssubst x v e1) (nssubst x v e2) (nssubst x v e3)
+    | NSRand e1 => NSRand (nssubst x v e1)
+    | NSPair e1 e2 => NSPair (nssubst x v e1) (nssubst x v e2)
+    | NSFst e => NSFst (nssubst x v e)
+    | NSSnd e => NSSnd (nssubst x v e)
+    | NSInjL e => NSInjL (nssubst x v e)
+    | NSInjR e => NSInjR (nssubst x v e)
+    | NSCase e1 e2 e3 => NSCase (nssubst x v e1) (nssubst x v e2) (nssubst x v e3)
+    | NSFork e1 => NSFork (nssubst x v e1)
+    | NSAlloc s e1 => NSAlloc s (nssubst x v e1)
+    | NSLoad e => NSLoad (nssubst x v e)
+    | NSStore e1 e2 => NSStore (nssubst x v e1) (nssubst x v e2)
+    | NSCAS e1 e2 e3 => NSCAS (nssubst x v e1) (nssubst x v e2) (nssubst x v e3)
+    | NSMakeAddress e1 e2 => NSMakeAddress (nssubst x v e1) (nssubst x v e2)
+    | NSGetAddressInfo e1 => NSGetAddressInfo (nssubst x v e1)
+    | NSNewSocket e1 => NSNewSocket (nssubst x v e1)
+    | NSSocketBind e1 e2 => NSSocketBind (nssubst x v e1) (nssubst x v e2)
+    | NSSendTo e1 e2 e3 => NSSendTo (nssubst x v e1) (nssubst x v e2) (nssubst x v e3)
+    | NSReceiveFrom e1 => NSReceiveFrom (nssubst x v e1)
+    | NSSetReceiveTimeout e1 e2 e3 => NSSetReceiveTimeout (nssubst x v e1) (nssubst x v e2) (nssubst x v e3)
+    | NSStart b e1 => NSStart b (nssubst x v e1)
+    end.
+
+  Definition nssubst' (mx : binder) (v : nsval) : nsexpr → nsexpr :=
+    match mx with
+    | BAnon => id
+    | BNamed x => nssubst x v
+    end.
+
+  Fixpoint reduce_aux (n : nat) : nsexpr → nat -> nat * (nsexpr + nsval) :=
+    match n with
+    | O   => fun e steps => (steps, inl e)
+    | S n =>
+        fix go (e : nsexpr) steps {struct e} :=
+      match e with
+      | NSMeta s n   => (steps, inl e)
+      | NSVal v      => (steps, inr v)
+      | NSRec f x e => (S steps, inr (NSRecV f x e))
+      | NSApp e1 e2 =>
+          match go e2 steps with
+          | (steps2, inl e2') => (steps2, inl (NSApp e1 e2'))
+          | (steps2, inr v2) =>
+              match go e1 steps2 with
+              | (steps1, inl e1') => (steps1, inl (NSApp e1' (NSVal v2)))
+              | (steps1, inr v1) =>
+                  match v1 with
+                  | NSRecV f x e3 =>
+                      reduce_aux n
+                        (nssubst' x v2 (nssubst' f (NSRecV f x e3) e3)) (S steps1)
+                  | _ => (steps1, inl (NSApp (NSVal v1) (NSVal v2)))
+                  end
+              end
+          end
+      | NSUnOp op e1 =>
+          match go e1 steps with
+          | (steps1, inl e1') => (steps1, inl (NSUnOp op e1'))
+          | (steps1, inr v1)  =>
+              match op, v1 with
+              | NegOp        , NSLitV (LitBool false) => (S steps1, inr (NSLitV (LitBool true)))
+              | NegOp        , NSLitV (LitBool true)  => (S steps1, inr (NSLitV (LitBool false)))
+              | StringLength , NSLitV (LitString s)   => (S steps1, inr (NSLitV (LitInt (String.length s))))
+              | StringOfInt  , NSLitV (LitInt i)      => (S steps1, inr (NSLitV (LitString (StringOfZ n))))
+              (* TODO: perform reductions here *)
+              | _ , _ => (steps1, inl (NSUnOp op (NSVal v1)))
+              end
+          end
+      | NSBinOp op e1 e2 =>
+          match go e2 steps with
+          | (steps2, inl e2') => (steps2, inl (NSBinOp op e1 e2'))
+          | (steps2, inr v2) =>
+              match go e1 steps2 with
+              | (steps1, inl e1') => (steps1, inl (NSBinOp op e1' (NSVal v2)))
+              | (steps1, inr v1)  =>
+                  (* TODO: perform reductions here *)
+                  (steps1, inl (NSBinOp op (NSVal v1) (NSVal v2)))
+              end
+          end
+      | NSIf e0 e1 e2 =>
+          match go e0 steps with
+          | (steps0, inl e0') => (steps0, inl (NSIf e0' e1 e2))
+          | (steps0, inr v0)  =>
+              match v0 with
+              | NSLitV (LitBool true) => go e1 (S steps0)
+              | NSLitV (LitBool false) => go e2 (S steps0)
+              | _         => (steps0, inl (NSIf (NSVal v0) e1 e2))
+              end
+          end
+      | NSPair e1 e2 =>
+          match go e2 steps with
+          | (steps2, inl e2') => (steps2, inl (NSPair e1 e2'))
+          | (steps2, inr v2 ) =>
+              match go e1 steps2 with
+              | (steps1, inl e1') => (steps1, inl (NSPair e1' (NSVal v2)))
+              | (steps1, inr v1)  => (S steps1, inr (NSPairV v1 v2))
+              end
+          end
+      | NSFst e0 =>
+          match go e0 steps with
+          | (steps0, inl e0') => (steps0, inl (NSFst e0'))
+          | (steps0, inr v0)  =>
+              match v0 with
+              | NSPairV v1 v2 => (S steps0, inr v1)
+              | _             => (steps0, inl (NSFst (NSVal v0)))
+              end
+          end
+      | NSSnd e0 =>
+          match go e0 steps with
+          | (steps0, inl e0') => (steps0, inl (NSSnd e0'))
+          | (steps0, inr v0)  =>
+              match v0 with
+              | NSPairV v1 v2 => (S steps0, inr v2)
+              | _             => (steps0, inl (NSSnd (NSVal v0)))
+              end
+          end
+      | NSInjL e0 =>
+          match go e0 steps with
+          | (steps0, inl e0') => (steps0, inl (NSInjL e0'))
+          | (steps0, inr v0)  => (S steps0, inr (NSInjLV v0))
+          end
+      | NSInjR e0 =>
+          match go e0 steps with
+          | (steps0, inl e0') => (steps0, inl (NSInjR e0'))
+          | (steps0, inr v0)  => (S steps0, inr (NSInjRV v0))
+          end
+      | NSCase e0 e1 e2 =>
+          match go e0 steps with
+          | (steps0, inl e0') => (steps0, inl (NSCase e0' e1 e2))
+          | (steps0, inr v0)  =>
+              match v0 with
+              | NSInjLV v => reduce_aux n (NSApp e1 (NSVal v)) (S steps0)
+              | NSInjRV v => reduce_aux n (NSApp e2 (NSVal v)) (S steps0)
+              | _         => (steps0, inl (NSCase (NSVal v0) e1 e2))
+              end
+          end
+      | NSAlloc s e1 =>
+          match go e1 steps with
+          | (steps1, inl e1') => (steps1, inl (NSAlloc s e1'))
+          | (steps1, inr v1)  => (steps1, inl (NSAlloc s (NSVal v1)))
+          end
+      | NSLoad e1 =>
+          match go e1 steps with
+          | (steps1, inl e1') => (steps1, inl (NSLoad e1'))
+          | (steps1, inr v1)  => (steps1, inl (NSLoad (NSVal v1)))
+          end
+      | NSStore e1 e2 =>
+          match go e2 steps with
+          | (steps2, inl e2') => (steps2, inl (NSStore e1 e2'))
+          | (steps2, inr v2)  =>
+              match go e1 steps2 with
+              | (steps1, inl e1')=> (steps1, inl (NSStore e1' (NSVal v2)))
+              | (steps1, inr v1) => (steps1, inl (NSStore (NSVal v1) (NSVal v2)))
+              end
+          end
+      | NSMakeAddress e1 e2 =>
+          match go e2 steps with
+          | (steps2, inl e2') => (steps2, inl (NSMakeAddress e1 e2'))
+          | (steps2, inr v2)  =>
+              match go e1 steps2 with
+              | (steps1, inl e1') => (steps1, inl (NSMakeAddress e1' (NSVal v2)))
+              | (steps1, inr v1)  =>
+                  match v1 , v2 with
+                  | NSLitV (LitString s) , NSLitV (LitInt p) =>
+                      (S steps1, inr (NSLitV (LitSocketAddress (SocketAddressInet s (Z.to_pos p)))))
+                  | _ , _ => (steps1, inl (NSMakeAddress (NSVal v1) (NSVal v2)))
+                  end
+              end
+          end
+      | NSVar _
+      | NSFindFrom _ _ _
+      | NSSubstring _ _ _
+      | NSRand _
+      | NSFork _
+      | NSCAS _ _ _
+      | NSGetAddressInfo _
+      | NSNewSocket _
+      | NSSocketBind _ _
+      | NSSendTo _ _ _
+      | NSReceiveFrom _
+      | NSSetReceiveTimeout _ _ _
+      | NSStart _ _
+        => (steps, inl e)
+      end
+    end.
+
+End Denote.
+#[global] Arguments ndenote _ _ _ /.
+#[global] Arguments ndenoteV _ _ _ /.
+#[global] Arguments ndenotes _ _ _ /.
+
+(* Definition reduce (e : nsexpr) : nsexpr := *)
+(*   match reduce_aux 10 e 0 with *)
+(*   | inl e' => e' *)
+(*   | inr v  => NSVal v *)
+(*   end. *)
+(* #[global] Arguments reduce e /. *)
+
+Definition reduce' (e : nsexpr) : option (nsexpr + nsval) :=
+  match reduce_aux 10 e 0 with
+  | (O, _) => None
+  | (S n, ev) => Some ev
+  end.
+#[global] Arguments reduce' e /.
+
+Lemma tac_wp_reduce_sound `{!anerisG Mdl Σ} (Δ : envs (iPropI Σ)) E
+  (ip : ip_address) (emap : list expr) (vmap : list val) (nse : nsexpr) (Φ : val → iProp Σ) :
+  forall nsev ev,
+    reduce' nse = nsev ->
+    ndenotes emap vmap nsev = ev ->
+    match ev with
+    | Some (inl e) => environments.envs_entails Δ (▷ aneris_wp ip E e Φ)
+    | Some (inr v) => environments.envs_entails Δ (▷ Φ v)
+    | None => False
+    end ->
+    environments.envs_entails Δ (aneris_wp ip E (ndenote emap vmap nse) Φ).
+Proof. Admitted.
+
+Ltac tac_wp_in_list x xs :=
+  match xs with
+  | @nil _         => false
+  | @cons _ x _    => true
+  | @cons _ _ ?xs' => tac_wp_in_list x xs'
+  end.
+
+Ltac tac_wp_add_to_emap e emap :=
+  let b := tac_wp_in_list e emap in
+  match b with
+  | true => emap
+  | false => constr:(@cons expr e emap)
+  end.
+
+Ltac tac_wp_add_to_vmap v vmap :=
+  let b := tac_wp_in_list v vmap in
+  match b with
+  | true => vmap
+  | false => constr:(@cons val v vmap)
+  end.
+
+Ltac tac_wp_mk_map_expr
+  emap0 (* : list expr *)
+  vmap0 (* : list val *)
+  e0    (* : expr *)
+  tac0  (* : list expr -> list val -> r *)
+        (* : r *)
+  :=
+  let rec tac_wp_mk_map_expr emap vmap e tac :=
+    (* idtac "tac_wp_mk_map_expr" emap vmap e; *)
+    lazymatch e with
+    | Val ?v =>
+        tac_wp_mk_map_val emap vmap v tac
+    | Var ?x =>
+        (* TODO: We do not allow meta-variables inside strings,
+           so should we check if x is ground? *)
+        tac emap vmap
+    | Rec ?b1 ?b2 ?e1 =>
+        tac_wp_mk_map_expr emap vmap e1 tac
+    | App ?e1 ?e2 =>
+        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
+        tac_wp_mk_map_expr emap1 vmap1 e2 tac)
+    | UnOp ?op ?e1 =>
+        tac_wp_mk_map_expr emap vmap e1 tac
+    | BinOp ?op ?e1 ?e2 =>
+        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
+        tac_wp_mk_map_expr emap1 vmap1 e2 tac)
+    | If ?e1 ?e2 ?e3 =>
+        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
+        tac_wp_mk_map_expr emap1 vmap1 e2 ltac:(fun emap2 vmap2 =>
+        tac_wp_mk_map_expr emap2 vmap2 e3 tac))
+    | FindFrom ?e1 ?e2 ?e3 =>
+        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
+        tac_wp_mk_map_expr emap1 vmap1 e2 ltac:(fun emap2 vmap2 =>
+        tac_wp_mk_map_expr emap2 vmap2 e3 tac))
+    | Substring ?e1 ?e2 ?e3 =>
+        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
+        tac_wp_mk_map_expr emap1 vmap1 e2 ltac:(fun emap2 vmap2 =>
+        tac_wp_mk_map_expr emap2 vmap2 e3 tac))
+    | Rand ?e1 =>
+        tac_wp_mk_map_expr emap vmap e1 tac
+    | Pair ?e1 ?e2 =>
+        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
+        tac_wp_mk_map_expr emap1 vmap1 e2 tac)
+    | Fst ?e1 =>
+        tac_wp_mk_map_expr emap vmap e1 tac
+    | Snd ?e1 =>
+        tac_wp_mk_map_expr emap vmap e1 tac
+    | InjL ?e1 =>
+        tac_wp_mk_map_expr emap vmap e1 tac
+    | InjR ?e1 =>
+        tac_wp_mk_map_expr emap vmap e1 tac
+    | Case ?e1 ?e2 ?e3 =>
+        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
+        tac_wp_mk_map_expr emap1 vmap1 e2 ltac:(fun emap2 vmap2 =>
+        tac_wp_mk_map_expr emap2 vmap2 e3 tac))
+    | Alloc ?s ?e1 =>
+        tac_wp_mk_map_expr emap vmap e1 tac
+    | MakeAddress ?e1 ?e2 =>
+        tac_wp_mk_map_expr emap vmap e1 ltac:(fun emap1 vmap1 =>
+        tac_wp_mk_map_expr emap1 vmap1 e2 tac)
+    | Start ?b ?e1 =>
+        tac_wp_mk_map_expr emap vmap e1 tac
+    | _      =>
+        (* idtac "tac_wp_mk_map_expr.default.beforeAddToEMap" emap; *)
+        let emap' := tac_wp_add_to_emap e emap in
+        (* idtac "tac_wp_mk_map_expr.default.afterAddToEMap" emap'; *)
+        tac emap' vmap
+    end
+  with tac_wp_mk_map_val emap vmap v tac :=
+    lazymatch v with
+    | LitV ?b =>
+        (* TODO: We do not allow meta-variables inside base_lits,
+           so should we check if b is ground? *)
+        tac emap vmap
+    | RecV ?b1 ?b2 ?e1 =>
+        tac_wp_mk_map_expr emap vmap e1 tac
+    | PairV ?v1 ?v2 =>
+        tac_wp_mk_map_val emap vmap v1 ltac:(fun emap1 vmap1 =>
+        tac_wp_mk_map_val emap1 vmap1 v2 tac)
+    | InjLV ?v1 =>
+        tac_wp_mk_map_val emap vmap v1 tac
+    | InjRV ?v1 =>
+        tac_wp_mk_map_val emap vmap v1 tac
+    | _ =>
+        let vmap' := tac_wp_add_to_vmap v vmap in
+        tac emap vmap'
+    end
+  in tac_wp_mk_map_expr emap0 vmap0 e0 tac0.
+
+Ltac tac_wp_map_lookup
+  (* forall a. *)
+  x  (* : a *)
+  xs (* : list a *)
+     (* : nat *)
+  := lazymatch xs with
+     | @cons _ x _    => O
+     | @cons _ _ ?xs' =>
+         let n := tac_wp_map_lookup x xs' in
+         constr:(S n)
+     end.
+
+Ltac tac_wp_reify_expr emap vmap e0 :=
+  let rec tac_wp_reify_expr e :=
+    lazymatch e with
+    | Val ?v =>
+        let nsv := tac_wp_reify_val v in
+        constr:(NSVal nsv)
+    | Var ?x =>
+        constr:(NSVar x)
+    | Rec ?b1 ?b2 ?e1 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        constr:(NSRec b1 b2 nse1)
+    | App ?e1 ?e2 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        let nse2 := tac_wp_reify_expr e2 in
+        constr:(NSApp nse1 nse2)
+    | UnOp ?op ?e1 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        constr:(NSUnOp op nse1)
+    | BinOp ?op ?e1 ?e2 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        let nse2 := tac_wp_reify_expr e2 in
+        constr:(NSBinOp op nse1 nse2)
+    | If ?e1 ?e2 ?e3 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        let nse2 := tac_wp_reify_expr e2 in
+        let nse3 := tac_wp_reify_expr e3 in
+        constr:(NSIf nse1 nse2 nse3)
+    | FindFrom ?e1 ?e2 ?e3 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        let nse2 := tac_wp_reify_expr e2 in
+        let nse3 := tac_wp_reify_expr e3 in
+        constr:(NSFindFrom nse1 nse2 nse3)
+    | Substring ?e1 ?e2 ?e3 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        let nse2 := tac_wp_reify_expr e2 in
+        let nse3 := tac_wp_reify_expr e3 in
+        constr:(NSSubstring nse1 nse2 nse3)
+    | Rand ?e1 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        constr:(NSRand op nse1)
+    | Pair ?e1 ?e2 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        let nse2 := tac_wp_reify_expr e2 in
+        constr:(NSPair nse1 nse2)
+    | Fst ?e1 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        constr:(NSFst nse1)
+    | Snd ?e1 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        constr:(NSSnd nse1)
+    | InjL ?e1 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        constr:(NSInjL nse1)
+    | InjR ?e1 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        constr:(NSInjR nse1)
+    | Case ?e1 ?e2 ?e3 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        let nse2 := tac_wp_reify_expr e2 in
+        let nse3 := tac_wp_reify_expr e3 in
+        constr:(NSCase nse1 nse2 nse3)
+    | Alloc ?s ?e1 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        constr:(NSAlloc s nse1)
+    | MakeAddress ?e1 ?e2 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        let nse2 := tac_wp_reify_expr e2 in
+        constr:(NSMakeAddress nse1 nse2)
+    | Start ?b ?e1 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        constr:(NSStart b nse1)
+    | _ =>
+        let n := tac_wp_map_lookup e emap in
+        constr:(NSMeta (@nil (string * nsval)) n)
+    end
+  with tac_wp_reify_val v :=
+    lazymatch v with
+    | LitV ?b =>
+        constr:(NSLitV b)
+    | RecV ?b1 ?b2 ?e1 =>
+        let nse1 := tac_wp_reify_expr e1 in
+        constr:(NSRecV b1 b2 nse1)
+    | PairV ?v1 ?v2 =>
+        let nsv1 := tac_wp_reify_val v1 in
+        let nsv2 := tac_wp_reify_val v2 in
+        constr:(NSPairV nsv1 nsv2)
+    | InjLV ?v1 =>
+        let nsv1 := tac_wp_reify_val v1 in
+        constr:(NSInjLV nsv1)
+    | InjRV ?v1 =>
+        let nsv1 := tac_wp_reify_val v1 in
+        constr:(NSInjRV nsv1)
+    | _ =>
+        let n := tac_wp_map_lookup v vmap in
+        constr:(NSMetaV  n)
+    end
+  in tac_wp_reify_expr e0.
+
+Ltac tac_wp_reify :=
+  match goal with
+  |- environments.envs_entails ?E (aneris_wp ?ip ?m ?e ?Φ) =>
+      (* Simplify to reduce some calls to [inject] like [Inject_expr]. *)
+      let e := eval simpl in e in
+      tac_wp_mk_map_expr (@nil expr) (@nil val) e
+        ltac:(fun emap vmap =>
+                let e' := tac_wp_reify_expr emap vmap e in
+                change (environments.envs_entails E
+                          (aneris_wp ip m (ndenote emap vmap e') Φ)))
+  end.
+
 Ltac wp_pures :=
   iStartProof;
-  repeat (wp_pure _; []). (* The `;[]` makes sure that no side-condition
-                             magically spawns. *)
+  try
+    (tac_wp_reify;
+     (* eapply because of e' *)
+     simple eapply tac_wp_reduce_sound;
+     [ (* reduce = .. *)
+       vm_compute; reflexivity
+     | (* denote = .. *)
+       simpl; reflexivity
+     | (* envs_entails  *)
+       cbv match
+     ];
+     match goal with
+     | |- False => fail
+     | |- _ => iModIntro
+     end).
+
+Ltac old_wp_pures :=
+  iStartProof;
+  repeat (wp_pure _; []). (* The `;[]` makes sure that no side-condition *)
+                          (* magically spawns. *)
 
 (** Unlike [wp_pures], the tactics [wp_rec] and [wp_lam] should also reduce
 lambdas/recs that are hidden behind a definition, i.e. they should use
@@ -667,6 +1269,72 @@ Tactic Notation "wp_send_duplicate" :=
 (*   let Ha := fresh "H" in *)
 (*   let Hb := fresh "H" in *)
 (*   wp_receive msg Ha Hb as H. *)
+
+    Section ReifyTest.
+      Axiom P : expr -> Prop.
+
+      Unset Printing Notations.
+
+      Ltac reifyTest :=
+        match goal with
+        | |- P ?e =>
+            tac_wp_mk_map_expr (@nil expr) (@nil val) e
+              ltac:(fun emap vmap =>
+                      idtac "reify.cont.before" emap vmap e;
+                      let e' := tac_wp_reify_expr emap vmap e in
+                      idtac "reify.cont.after" emap vmap e';
+                      change (P (ndenote emap vmap e')))
+        end.
+
+
+      Goal P (Val #()).
+      Proof. reifyTest. simpl. Abort.
+
+      Goal P (NewSocket (Val (LitV LitUnit))).
+      Proof.
+        reifyTest. simpl.
+      Abort.
+
+      Goal forall v, P (Case (Val (InjLV v)) (Rec BAnon (BNamed "w") (Var "w"))
+          (Rec BAnon (BNamed "_") (App (Val assert) (Rec BAnon BAnon (Val (LitV (LitBool false))))))).
+      Proof. intros. reifyTest. simpl. Abort.
+
+      Goal P (InjL (Val (LitV LitUnit))).
+      Proof.
+        reifyTest. simpl.
+      Abort.
+
+      Goal forall v1 v2, P (Rec BAnon "list" (InjR (Pair v1 "list")) v2).
+      Proof. intros. reifyTest. simpl. Abort.
+
+      Goal forall e, P (If (RecV BAnon BAnon e (LitV LitUnit)) (LitV LitUnit) (LitV 0 (LitV 0))).
+      Proof. intros. reifyTest. simpl. Abort.
+
+      Goal P (If (Val (LitV (LitBool true))) (Val (LitV (LitBool true))) (Val (LitV (LitBool true)))).
+      Proof. intros. reifyTest. simpl. Abort.
+
+      Goal forall h unSOME list_mem l m sa, P (If (UnOp NegOp (Val (LitV (LitBool false))))
+          (Val
+             (PairV (LitV (LitString m))
+                (LitV (LitSocketAddress sa))))
+          (App
+             (Val
+                (RecV (BNamed "loop") BAnon
+                   (App
+                      (Rec BAnon (BNamed "msg")
+                         (If
+                            (App (Val (RecV BAnon (BNamed "m") (UnOp NegOp (App (App (Val list_mem) (Var "m")) (Val l)))))
+                               (Var "msg")) (Var "msg") (App (Var "loop") (Val (LitV LitUnit)))))
+                      (App (Val unSOME) (ReceiveFrom (Val (LitV (LitSocket h)))))))) (Val (LitV LitUnit)))).
+      Proof. intros. reifyTest. simpl. Abort.
+
+      Goal forall t v, P (UnOp StringLength (Val (LitV (LitString (append t (append "_" v)))))).
+      Proof. intros. reifyTest. simpl. Abort.
+
+    End ReifyTest.
+
+
+
 
 Local Lemma tac_socket_test `{anerisG Mdl Σ} ip E :
   {{{ True }}}

@@ -19,7 +19,7 @@ Section set_specs.
     {{{ v, RET v; ⌜is_set ∅ v⌝}}}.
   Proof.
     iIntros (Φ) "_ HΦ".
-    wp_rec. wp_pures. iApply "HΦ".
+    wp_rec. old_wp_pures. iApply "HΦ".
     iExists []. repeat iSplit; auto.
     iPureIntro; by apply NoDup_nil.
   Qed.
@@ -110,7 +110,7 @@ Section set_specs.
     rewrite /set_subseteq. wp_pures.
     wp_apply (wp_list_forall (λ x, ⌜x ∈ Y⌝) (λ x, ⌜x ∉ Y⌝) with "[] [//]")%I.
     { iIntros (x v Ψ) "!#". iIntros "HΨ".
-      wp_pures. wp_apply (wp_set_mem with "[//]").
+      old_wp_pures. wp_apply (wp_set_mem with "[//]").
       iIntros ([] ?); by iApply "HΨ". }
     iIntros ([]) "Hb".
     - iApply "HΦ".

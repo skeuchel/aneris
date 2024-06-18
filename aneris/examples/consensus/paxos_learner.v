@@ -23,7 +23,7 @@ Section paxos_learner.
     iIntros (??) "#Hl_si Hh Hl". rewrite /learner.
     wp_pures.
     wp_apply wp_set_cardinal; [done|]; iIntros "_".
-    wp_pures.
+    old_wp_pures.
     wp_apply (wp_map_empty Ballot val); [done|].
     iIntros (??).
     wp_alloc lv as "Hlv".
@@ -39,27 +39,27 @@ Section paxos_learner.
     wp_pure _.
     iLöb as "IH" forall (R T).
     iDestruct "H" as (d vd) "(Hlv & %Hd & Hmsgs)".
-    wp_pures.
+    old_wp_pures.
     wp_bind (ReceiveFrom _).
     wp_apply (aneris_wp_pers_receivefrom with "[$Hh $Hl $Hl_si]");
       [done|done|done|].
     iIntros (m) "(Hh & Hl & (%a & %b & %z & %Hser & -> & #Hshot & #Hm))".
     wp_apply wp_unSOME; [done|]; iIntros "_".
-    wp_pures.
+    old_wp_pures.
     wp_apply (s_deser_spec learner_serialization); [done|]; iIntros "_".
-    wp_pures. wp_load. wp_pures.
+    old_wp_pures. wp_load. old_wp_pures.
     wp_apply (wp_map_lookup $! Hd).
     destruct (d !! b) as [p|] eqn:Heq; iIntros (? ->).
-    - wp_pures.
+    - old_wp_pures.
       iDestruct (big_sepM_delete _ _ b p with "Hmsgs")
         as "[(%X & %v' & %HX & #Hshot' & #HX) Hmsgs]"; [done|].
       iDestruct (shot_agree with "Hshot Hshot'") as %<-.
       wp_apply (wp_set_add $! HX).
       iIntros (? HX').
-      wp_pures.
+      old_wp_pures.
       wp_apply wp_set_cardinal; [done|]; iIntros "_".
       wp_op.
-      case_bool_decide as Hsize; wp_pures.
+      case_bool_decide as Hsize; old_wp_pures.
       + iExists ({[a]} ∪ X), _, _, _, _. iFrame. iSplit.
         { iPureIntro.
           apply majority_show_quorum.
@@ -83,17 +83,17 @@ Section paxos_learner.
         { by assert ({[a]} ∪ X = X) as -> by set_solver. }
         rewrite big_sepS_union ?big_sepS_singleton; [|set_solver].
         iFrame "#".
-    - wp_pures.
+    - old_wp_pures.
       wp_apply (wp_set_empty Acceptor); [done|].
       iIntros (? HX).
-      wp_pures.
+      old_wp_pures.
       wp_apply (wp_set_add $! HX).
       iIntros (? HX').
-      wp_pures.
+      old_wp_pures.
       wp_apply wp_set_cardinal; [done|]; iIntros "_".
       rewrite union_empty_r_L size_singleton.
       wp_op.
-      case_bool_decide as Hsize; wp_pures.
+      case_bool_decide as Hsize; old_wp_pures.
       + iExists {[a]}, _, _, _, _.
         rewrite big_sepS_singleton //.
         iFrame "∗ #".

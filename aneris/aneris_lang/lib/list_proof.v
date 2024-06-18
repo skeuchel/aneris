@@ -46,14 +46,21 @@ Section list_specs.
     {{{ True }}}
       [] @[ip]
     {{{ v, RET v; ⌜is_list [] v⌝}}}.
-  Proof. iIntros (Φ) "_ HΦ". wp_pures. by iApply "HΦ". Qed.
+  Proof.
+    iIntros (Φ) "_ HΦ".
+    unfold list_nil.
+    wp_pures.
+    by iApply "HΦ".
+  Qed.
 
   Lemma wp_list_cons a l lv ip :
     {{{ ⌜is_list l lv⌝ }}}
       $a :: lv @[ip]
     {{{ v, RET v; ⌜is_list (a::l) v⌝}}}.
   Proof.
-    iIntros (Φ) "% HΦ". wp_lam. wp_pures.
+    iIntros (Φ) "% HΦ".
+    unfold list_cons.
+    wp_pures.
     iApply "HΦ". iPureIntro; by eexists.
   Qed.
 
@@ -62,7 +69,9 @@ Section list_specs.
       [$a] @[ip]
     {{{ v, RET v; ⌜is_list [a] v⌝ }}}.
   Proof.
-    iIntros (Φ) "_ HΦ". wp_pures.
+    iIntros (Φ) "_ HΦ".
+    unfold list_nil.
+    wp_pures.
     wp_apply (wp_list_cons _ []); [done|].
     iIntros (v' Hv').
     by iApply "HΦ".
@@ -233,10 +242,10 @@ Section list_specs.
     iIntros (Φ') "!> [HP Hl] HΦ".
     iInduction l as [ | h l] "IH" forall (lv k Hl).
     { wp_lam. rewrite Hl. wp_pures. iApply "HΦ". by iFrame. }
-    wp_lam. destruct Hl as [l' [-> Hl']]. wp_pures.
+    wp_lam. destruct Hl as [l' [-> Hl']]. old_wp_pures.
     iDestruct "Hl" as "[Ha Hl']". rewrite right_id_L.
     wp_apply ("Hf" with "[$HP $Ha]"). iIntros (v) "[HP HΨ]".
-    wp_pures.
+    old_wp_pures.
     replace (Z.add (Z.of_nat k) (Zpos xH)) with (Z.of_nat (k + 1)) by lia.
     iApply ("IH" $!l' (k+1)%nat with "[//] HP [Hl'] [HΨ HΦ]").
     { iApply (big_sepL_impl with "Hl'").
@@ -344,7 +353,7 @@ Section list_specs.
    iIntros (Φ) "Hcoh HΦ".
    iInduction l as [|a l'] "IH" forall (k lv Φ);
    iDestruct "Hcoh" as %Hcoh; simpl in Hcoh; subst; wp_rec;
-   wp_pures; case_bool_decide; wp_if; wp_pures.
+   old_wp_pures; case_bool_decide; wp_if; wp_pures.
    - iApply "HΦ"; by rewrite take_nil.
    - iApply "HΦ"; by rewrite take_nil.
    - iApply "HΦ". assert (k = O) as H1 by lia. by rewrite H1 firstn_O.
@@ -368,7 +377,8 @@ Section list_specs.
     - wp_match. wp_pures.
       iApply ("HΦ" $! (InjLV #())). iLeft. simpl. eauto with lia.
     - destruct Ha as [lv' [Hlv Hlcoh]]; subst.
-      wp_match. wp_pures. case_bool_decide; wp_pures.
+      old_wp_pures.
+      case_bool_decide; old_wp_pures.
       + iApply "HΦ". iRight. simpl. iExists a. by destruct i.
       + destruct i; first done.
         assert ((S i - 1)%Z = i) as -> by lia.
@@ -473,7 +483,9 @@ Section list_specs.
       list_rev (Val l) @[ip]
     {{{ v, RET v; ⌜is_list (reverse lM) v⌝ }}}.
   Proof.
-    iIntros (??) "H". rewrite /list_rev. wp_pures.
+    iIntros (??) "H". rewrite /list_rev.
+    unfold list_nil.
+    wp_pures.
     by iApply (wp_list_rev_aux _ _ _ NONEV []).
   Qed.
 
@@ -707,7 +719,7 @@ Section list_specs_extra.
           done.
       + iModIntro.
         iIntros (rv) "[%Hil'' Hown]".
-        wp_pures.
+        old_wp_pures.
         iAssert (⌜#k = $ (k + 0)%nat⌝%I) as %->.
         { simpl.
           iPureIntro.
@@ -763,7 +775,7 @@ Section list_specs_extra.
   Proof.
     iIntros (Φ) "[#Hf [%Hil Hown]] HΦ".
     rewrite /list_mapi.
-    do 3 wp_pure _.
+    wp_pures.
     iAssert (⌜#0 = #(0%nat)⌝%I) as %->; [done |].
     iApply (wp_list_mapi_loop with "[Hown]").
     - iSplitL ""; last first.
