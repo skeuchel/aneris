@@ -214,7 +214,7 @@ Section paxos_acceptor.
     iDestruct "Hm" as "(% & -> & [(%bal & % & Hm1) | (%bal & %val & % & Hm1)])".
     - (* a phase 1a message was received *)
       wp_apply (s_deser_spec acceptor_serialization); [done|]; iIntros "_".
-      wp_pures.
+      old_wp_pures.
       wp_load.
       destruct maxBal as [bal'|].
       + (* [maxBal] has been initialized *)
@@ -245,7 +245,7 @@ Section paxos_acceptor.
         iApply ("IH" with "Hh"). iExists _, _. by iFrame.
     - (* phase 2a message was received *)
       wp_apply (s_deser_spec acceptor_serialization); [done|]; iIntros "_".
-      wp_pures.
+      old_wp_pures.
       wp_load.
       destruct maxBal as [bal'|].
       + (* [maxBal] has been initialized *)

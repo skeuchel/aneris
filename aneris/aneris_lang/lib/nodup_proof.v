@@ -43,7 +43,7 @@ Section nodup_specs.
     wp_apply (aneris_wp_receivefrom with "[$Hh $Hφ $Ha]"); [done..|].
     iIntros (?) "[%Hd [(%Hm & Hh & Ha & _ & Hm) | (%Hm & Hh & Ha)]]".
     - wp_apply wp_unSOME; [done|]; iIntros "_".
-      wp_pures.
+      old_wp_pures.
       wp_apply (wp_set_mem _ (m_body m, m_sender m) with "[//]");
         iIntros ([] Hb).
       { apply gset_map_correct2 in Hb.
@@ -51,17 +51,17 @@ Section nodup_specs.
         rewrite -(Hdest _ Hm') in Hd.
         simplify_eq.
         by rewrite (message_inv m m') in Hm. }
-      wp_pures.
+      old_wp_pures.
       wp_apply (wp_set_add _ (m_body m, m_sender m) with "[//]").
       iIntros (v' Hv').
-      wp_pures. iApply "HΦ".
+      old_wp_pures. iApply "HΦ".
       iFrame. iPureIntro.
       rewrite -(gset_map_singleton (λ m, (m_body m, m_sender m)) m) -gset_map_union in Hv'.
       do 3 (split; auto).
       intros ? [-> %elem_of_singleton_1 | ?]%elem_of_union; [done|].
       by apply Hdest.
     - wp_apply wp_unSOME; [done|]; iIntros "_".
-      wp_pures.
+      old_wp_pures.
       wp_apply (wp_set_mem _ (m_body m, m_sender m) with "[//]").
       iIntros ([] Hb); last first.
       { by apply (gset_map_correct1 (λ m, (m_body m, m_sender m))) in Hm. }
@@ -100,7 +100,7 @@ Section nodup_specs.
     wp_pures. wp_load.
     wp_apply (wp_receivefrom_nodup with "[$Hh $Ha $Hφ //]"); [done..|].
     iIntros (m v) "(Hh & Ha & Hm & % & % & %)".
-    wp_pures. wp_store.
+    old_wp_pures. wp_store.
     iApply "HΨ". iFrame. iFrame "%".
     iExists _. by iFrame.
   Qed.
@@ -149,7 +149,7 @@ Section nodup_specs.
     { wp_load. iApply "HΦ". iSplit; [done|]. iFrame. auto. }
     wp_apply ("Hrecv" with "[$Hh $Hφ $Ha $Hlog]").
     iIntros (m) "(Hh & Ha & Hm & Hlog & % & %)".
-    wp_pures. wp_load. wp_pures.
+    old_wp_pures. wp_load. old_wp_pures.
     wp_apply (wp_map_insert $! Hd).
     iIntros (d' Hd').
     wp_store.

@@ -23,10 +23,10 @@ Section paxos_proposer.
                ∃ a, ⌜a ∈ senders⌝ ∗ msgs_elem_of (msg1b a b mv)) }}}.
   Proof.
     iIntros (? Φ) "(#Hinv & #Hp_si & Hh) HΦ". rewrite /recv_promises.
-    wp_pures.
+    old_wp_pures.
     wp_apply (wp_set_empty (option (Ballot * Value))); [done|].
     iIntros (vp Hvp). wp_alloc lp as "Hlp".
-    wp_pures.
+    old_wp_pures.
     wp_apply (wp_set_empty Acceptor); [done|].
     iIntros (vs Hvs). wp_alloc ls as "Hls".
     do 4 wp_pure _.
@@ -44,10 +44,10 @@ Section paxos_proposer.
     clear Hvp Hvs vs vp. wp_pure _.
     iLöb as "IH".
     iDestruct "Hloop" as (promises senders vp vs) "(Hlp & Hls & %Hvp & %Hvs & Hincl & Hacc)".
-    wp_pures.
+    old_wp_pures.
     wp_load.
     wp_apply wp_set_cardinal; [done|]; iIntros "_".
-    wp_op. case_bool_decide as Heq; wp_pures.
+    wp_op. case_bool_decide as Heq; old_wp_pures.
     { wp_load. iApply "HΦ". iFrame. apply Nat2Z.inj in Heq. by iFrame "%". }
     wp_bind (ReceiveFrom _).
     iInv (paxosN) as (δ) "(>Hfrag & >Hmauth & >Hbal & >Hval & Hmcoh & >HbI)"
@@ -67,9 +67,9 @@ Section paxos_proposer.
     rewrite /proposer_si.
     iDestruct "Hm" as (?? mval Hser) "(-> & Hm)".
     iModIntro. wp_apply wp_unSOME; [done|]; iIntros "_".
-    wp_pures.
+    old_wp_pures.
     wp_apply (s_deser_spec proposer_serialization); [done|]; iIntros "_".
-    wp_pures.
+    old_wp_pures.
     case_bool_decide; wp_if; last first.
     { wp_seq. wp_apply ("IH" with "Hh HΦ [Hlp Hls Hincl Hacc]").
       iExists _, _, _, _. auto with iFrame. }
@@ -120,14 +120,14 @@ Section paxos_proposer.
                 (λ _, True%I) (λ _, True%I)).
     { iIntros ([[b v]|] acc X) "!#";
         iIntros (Ψ) "[[[-> %Hall] | (% & % & %Hin & -> & %Hall)] _] HΨ".
-      - wp_pures. iApply "HΨ". iSplit; [|done]. iRight.
+      - old_wp_pures. iApply "HΨ". iSplit; [|done]. iRight.
         iExists b, v. iPureIntro.
         split; [by apply elem_of_union_r, elem_of_singleton|].
         split; [done|].
         apply set_Forall_union.
         { apply (set_Forall_impl _ _ _ Hall). by intros ? ->. }
         apply set_Forall_singleton. lia.
-      - wp_pures. case_bool_decide; wp_if.
+      - old_wp_pures. case_bool_decide; wp_if.
         + iApply "HΨ". iPureIntro.
           split; [|done]. right.
           do 2 eexists.
@@ -148,7 +148,7 @@ Section paxos_proposer.
         split; [done|].
         apply set_Forall_union; [done|].
         by apply set_Forall_singleton.
-      - wp_pures. iApply "HΨ". iPureIntro.
+      - old_wp_pures. iApply "HΨ". iPureIntro.
         split; [|done]. right.
         do 2 eexists.
         split; [by apply elem_of_union_l, Hin|].
@@ -174,7 +174,7 @@ Section paxos_proposer.
   Proof.
     iIntros (?) "#Hinv #HA_sis #Hp_si Hh Hb".
     rewrite /proposer.
-    wp_pures.
+    old_wp_pures.
     wp_apply (s_ser_spec (acceptor_serialization)).
     { iPureIntro. apply serializable. }
     iIntros (s) "%Hser".
@@ -214,19 +214,19 @@ Section paxos_proposer.
       { apply elem_of_union; auto. }
       simpl. destruct_is_ser Hser.
       by exists p, (a ↾ Ha). }
-    iIntros "(_ & Hh & _ & Helem)". wp_pures.
+    iIntros "(_ & Hh & _ & Helem)". old_wp_pures.
     wp_apply (wp_set_cardinal with "[//]"); iIntros "_".
-    wp_pures.
+    old_wp_pures.
     replace #(_ + 1) with #(size Acceptors / 2 + 1)%nat; last first.
     { do 2 f_equal. lia. }
     wp_apply (recv_promises_spec with "[$Hinv $Hp_si $Hh]"); [auto|].
     iIntros (vp promises senders) "(Hh & %Hvp & %Hsize & #Hmsgs & #Hacc)".
-    wp_pures.
+    old_wp_pures.
     (* find the maximum phase 1b message from the majority, if any *)
     wp_apply (find_max_promise_spec _ promises with "[//]"); [done|].
     iIntros (?) "[(-> & %Hpromises) | (%b0 & %z' & %Hin &-> & %Hall)]".
     - (* no value was proposed by the majority *)
-      wp_pures.
+      old_wp_pures.
       iMod (pend_update_shot b z with "Hb") as "#Hshot".
       wp_apply (s_ser_spec (acceptor_serialization)).
       { iPureIntro. apply serializable. }
@@ -319,7 +319,7 @@ Section paxos_proposer.
       destruct Acceptors_choose as [a ?].
       by iApply (big_sepS_elem_of _ _ a with "H2a").
     - (* a value has already been proposed *)
-      wp_pures.
+      old_wp_pures.
       wp_apply (s_ser_spec (acceptor_serialization)).
       { iPureIntro. apply serializable. }
       iIntros (s' Hser').
@@ -426,9 +426,9 @@ Section paxos_proposer.
        @[ip_of_address (`p)] {{ _, True }}.
   Proof.
     iIntros (??) "#Hinv #Has Hport #Hp Hi". rewrite /proposer'.
-    wp_pures.
+    old_wp_pures.
     wp_socket sh as "Hskt".
-    wp_pures.
+    old_wp_pures.
     wp_socketbind.
     wp_alloc l as "Hl".
     do 4 wp_pure _.
@@ -439,9 +439,9 @@ Section paxos_proposer.
     wp_pure _.
     iLöb as "IH".
     iDestruct "Hloop" as (b) "(Hi & Hl)".
-    wp_pures.
+    old_wp_pures.
     wp_load.
-    wp_pures.
+    old_wp_pures.
     iDestruct (pending_pend_split with "Hi") as "[Hi Hpend]"; [done|].                             
     replace (#(b * size Proposers + i)) with (#(b * size Proposers + i)%nat)
       by (do 2 f_equal; lia).
